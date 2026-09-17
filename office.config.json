@@ -1,0 +1,17 @@
+{
+  "port": 4488,
+  "language": "en",
+  "jira": {
+    "project": "",
+    "scopeJql": "sprint in openSprints()",
+    "maxResults": 30,
+    "maxTickets": 8,
+    "writeEnabled": false,
+    "issueTypes": { "story": "Story", "bug": "Bug", "task": "Task", "subtask": "Sub-task" },
+    "linkTypes": { "blocks": "Blocks", "relates": "Relates" }
+  },
+  "workspace": { "repoDir": null },
+  "commands": {},
+  "safety": { "forbiddenPattern": "prod" },
+  "llm": { "model": "claude-opus-5", "maxBudgetUsdPerCall": 3, "timeoutMinutes": 15 }
+}

@@ -1,0 +1,53 @@
+{
+  "id": "product-owner",
+  "name": "Product crew",
+  "role": "product owner",
+  "description": "Finds the stories that are not ready, rewrites them with testable acceptance criteria, and proposes how to split the large ones.",
+  "stationLabels": { "board": "Backlog", "rack": "Archive", "terminal": "Writing desk", "bench": "Splitting table" },
+  "agents": [
+    { "id": "gus", "name": "Gus", "title": "Backlog Groomer", "shirt": "#3a66c9", "hair": "#d8a03a", "skin": "#f3d2b3" },
+    { "id": "rita", "name": "Rita", "title": "Story Writer", "shirt": "#d0492f", "hair": "#1e1b2e", "skin": "#c98e62" },
+    { "id": "sam", "name": "Sam", "title": "Story Splitter", "shirt": "#8a5cc2", "hair": "#4a2c1f", "skin": "#f1c7a0" }
+  ],
+  "briefing": {
+    "agent": "gus",
+    "jql": "project = {{project}} AND statusCategory = \"To Do\" AND issuetype not in subTaskIssueTypes() ORDER BY priority DESC, created DESC",
+    "rankPrompt": "You prepare a product owner's refinement session. Put first the stories most likely to be picked up soon that are not ready: a vague description, no acceptance criteria, or clearly too large. Mark as not actionable the stories that are already clear, small and testable."
+  },
+  "workflow": [
+    { "id": "refine", "type": "think", "agent": "rita", "station": "terminal", "label": "Rewrite the story",
+      "message": "Rewriting {{ticket.key}} so a team can build and test it",
+      "doneMessage": "Story rewritten with {{story.acceptanceCriteria|count}} acceptance criteria",
+      "prompt": "Rewrite this Jira story so that a development team can build it and a tester can check it. Keep every fact and constraint of the original and do not add scope. Where the original is silent, do not guess: put the gap in openQuestions.\n\n- userStory: one sentence, As a <who>, I want <what>, so that <why>.\n- context: two to four sentences of background taken from the original.\n- acceptanceCriteria: 3 to 8 statements, each one checkable as true or false.\n- outOfScope: what this story explicitly does not cover.\n- openQuestions: what the product owner must answer before the team starts.\n- description: the full new description as text with # headings and - bullets, built from the parts above.\n\nStory {{ticket.key}}: {{ticket.summary}}\nType: {{ticket.type}}\n\n{{ticket.description}}",
+      "schema": { "type": "object", "properties": {
+        "userStory": { "type": "string" }, "context": { "type": "string" },
+        "acceptanceCriteria": { "type": "array", "items": { "type": "string" } },
+        "outOfScope": { "type": "array", "items": { "type": "string" } },
+        "openQuestions": { "type": "array", "items": { "type": "string" } },
+        "description": { "type": "string" } } },
+      "save": "story",
+      "show": [ { "title": "User story", "path": "story.userStory" }, { "title": "Acceptance criteria", "path": "story.acceptanceCriteria" }, { "title": "Open questions", "path": "story.openQuestions" } ] },
+    { "id": "split", "type": "think", "agent": "sam", "station": "bench", "label": "Check whether to split it",
+      "message": "Checking whether {{ticket.key}} is too large", "doneMessage": "Split proposal: {{split.stories|count}} stories",
+      "prompt": "Decide whether this story should be split. Split only when it holds more than one independently valuable slice, or clearly more than a few days of work. When you split, each new story must deliver value on its own, and together they must cover every acceptance criterion exactly once. Give each story a summary and a description with its own acceptance criteria as - bullets. When the story should stay whole, return shouldSplit false and an empty stories list.\n\nStory {{ticket.key}}: {{ticket.summary}}\n\n{{story.userStory}}\n\nAcceptance criteria:\n{{story.acceptanceCriteria}}",
+      "schema": { "type": "object", "properties": { "shouldSplit": { "type": "boolean" }, "reason": { "type": "string" },
+        "stories": { "type": "array", "items": { "type": "object", "properties": { "summary": { "type": "string" }, "description": { "type": "string" } } } } } },
+      "save": "split", "show": [ { "title": "Split advice", "path": "split.reason" }, { "title": "Proposed stories", "path": "split.stories" } ] },
+    { "id": "choose", "type": "gate", "agent": "rita", "label": "Choose what to do with the rewrite", "title": "How should {{ticket.key}} change?",
+      "message": "Rita can replace the description with her rewrite, or leave the original and add the rewrite as a comment.",
+      "show": [ { "title": "Acceptance criteria", "path": "story.acceptanceCriteria" }, { "title": "Open questions", "path": "story.openQuestions" } ],
+      "actions": [
+        { "id": "as-comment", "label": "Add it as a comment", "primary": true },
+        { "id": "replace", "label": "Replace the description", "goto": "replace-description" },
+        { "id": "stop", "label": "Leave the story alone", "result": { "label": "Left as is", "tone": "muted" } } ] },
+    { "id": "comment-rewrite", "type": "jira", "agent": "rita", "label": "Add the rewrite as a comment", "action": "comment", "approveLabel": "Post comment",
+      "body": "# Proposed rewrite\n{{story.description}}", "goto": "should-split" },
+    { "id": "replace-description", "type": "jira", "agent": "rita", "label": "Replace the description", "action": "update", "approveLabel": "Replace description",
+      "body": "{{story.description}}" },
+    { "id": "should-split", "type": "branch", "when": { "path": "split.shouldSplit", "op": "truthy" }, "goto": "create-stories", "else": "refined" },
+    { "id": "create-stories", "type": "jira", "agent": "sam", "label": "Create the split stories", "action": "create", "approveLabel": "Create stories",
+      "from": "split.stories", "issueType": "{{issueTypes.story}}", "summary": "{{item.summary}}", "body": "{{item.description}}\n\nSplit from {{ticket.key}}.",
+      "linkTo": "{{ticket.key}}", "linkType": "{{linkTypes.relates}}", "save": "created" },
+    { "id": "refined", "type": "end", "result": { "label": "Refined", "tone": "ok" } }
+  ]
+}

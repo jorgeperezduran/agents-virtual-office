@@ -1,0 +1,658 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Agents Office</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🧪</text></svg>">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=Pixelify+Sans:wght@400;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#e4ebee; --surface:#ffffff; --surface-2:#eef2f4; --ink:#2b2340; --muted:#5f5776;
+  --line:#cfd6db; --frame:#2b2340; --accent:#c92a64; --accent-ink:#ffffff;
+  --ok:#23804a; --err:#b53f0c; --info:#3a66c9; --warn-bg:#fdecef;
+  --pixel:"Pixelify Sans","Trebuchet MS",system-ui,sans-serif;
+  --body:"Atkinson Hyperlegible",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --bg:#1c1928; --surface:#272338; --surface-2:#2f2a44; --ink:#ece8f5; --muted:#aca4c0;
+    --line:#3d3756; --frame:#0f0d18; --accent:#ff6b9a; --accent-ink:#1c1928;
+    --ok:#62d08f; --err:#ff8f63; --info:#86a9ff; --warn-bg:#3a2433;
+  }
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 var(--body)}
+:focus-visible{outline:3px solid var(--info);outline-offset:2px}
+header{max-width:1320px;margin:0 auto;padding:22px 20px 16px;display:flex;flex-wrap:wrap;gap:14px 28px;align-items:flex-end;justify-content:space-between}
+h1{font-family:var(--pixel);font-weight:600;font-size:clamp(30px,4.2vw,46px);line-height:1;margin:0}
+.sub{margin:8px 0 0;color:var(--muted);max-width:62ch}
+.controls{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.speed{display:inline-flex;border:2px solid var(--ink);border-radius:6px;overflow:hidden}
+.speed button{border:0;background:var(--surface);color:var(--ink);font:600 15px var(--pixel);padding:6px 11px;cursor:pointer}
+.speed button+button{border-left:2px solid var(--ink)}
+.speed button[aria-pressed="true"]{background:var(--ink);color:var(--bg)}
+.btn{font:600 16px/1.2 var(--pixel);border:2px solid var(--ink);background:var(--surface);color:var(--ink);padding:9px 14px;border-radius:6px;cursor:pointer;box-shadow:3px 3px 0 var(--ink)}
+.btn:active:not(:disabled){transform:translate(2px,2px);box-shadow:1px 1px 0 var(--ink)}
+.btn.primary{background:var(--accent);color:var(--accent-ink)}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.pill{font:600 13px var(--pixel);border:2px solid currentColor;border-radius:999px;padding:2px 10px;white-space:nowrap}
+.pill.on{color:var(--ok)} .pill.off{color:var(--err)} .pill.info{color:var(--info)}
+main{max-width:1320px;margin:0 auto;padding:0 20px 40px;display:grid;grid-template-columns:minmax(0,1fr) 400px;gap:24px;align-items:start}
+@media (max-width:960px){main{grid-template-columns:minmax(0,1fr)}}
+.stage{border:3px solid var(--frame);border-radius:8px;overflow:hidden;box-shadow:6px 6px 0 var(--frame);background:#bcd6ca}
+canvas{display:block;width:100%;height:auto;image-rendering:pixelated}
+.crew{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin:18px 0 0;padding:0;list-style:none}
+.crew li{background:var(--surface);border:2px solid var(--line);border-radius:6px;padding:8px 10px;display:flex;gap:10px;align-items:flex-start}
+.swatch{width:14px;height:14px;border:2px solid var(--frame);flex:none;margin-top:4px}
+.crew b{font-family:var(--pixel);font-weight:600;font-size:17px;display:block;line-height:1.2}
+.crew .role{color:var(--muted);font-size:13px;display:block}
+.crew .now{font-size:13px;display:block;margin-top:2px}
+.panel{background:var(--surface);border:3px solid var(--frame);border-radius:8px;padding:20px;box-shadow:6px 6px 0 var(--frame);position:sticky;top:16px;max-height:calc(100vh - 32px);overflow:auto}
+@media (max-width:960px){.panel{position:static;max-height:none}}
+.panel h2{font:600 24px/1.15 var(--pixel);margin:0 0 8px}
+.panel h3{font:600 17px/1.2 var(--pixel);margin:18px 0 6px}
+.panel p{margin:0 0 12px}
+.muted{color:var(--muted)}
+.small{font-size:14px}
+.tickets{list-style:none;margin:12px 0 0;padding:0;display:grid;gap:10px}
+.ticket{width:100%;text-align:left;border:2px solid var(--line);border-radius:6px;background:var(--surface-2);color:var(--ink);padding:10px 12px;cursor:pointer;font:inherit;display:grid;grid-template-columns:auto 1fr;gap:2px 10px}
+.ticket:hover:not(:disabled){border-color:var(--ink)}
+.ticket:disabled{cursor:not-allowed;opacity:.7}
+.rank{font:600 22px/1 var(--pixel);grid-row:span 4;color:var(--muted);min-width:18px}
+.tkey{font-weight:700;font-size:14px;color:var(--info)}
+.tsum{font-weight:700;line-height:1.3}
+.tmeta{font-size:13px;color:var(--muted)}
+.why{font-size:13px}
+.badge{display:inline-block;font-size:12px;font-weight:700;border-radius:4px;padding:1px 6px;margin-left:6px;border:1.5px solid currentColor}
+.badge.ok{color:var(--ok)} .badge.err{color:var(--err)} .badge.muted{color:var(--muted)}
+.steps{list-style:none;margin:10px 0 0;padding:0;display:grid;gap:8px;counter-reset:s}
+.steps li{display:grid;grid-template-columns:28px 1fr;align-items:center;gap:8px;color:var(--muted)}
+.steps li::before{counter-increment:s;content:counter(s);font:600 15px/24px var(--pixel);text-align:center;width:24px;height:24px;border:2px solid var(--line);border-radius:4px}
+.steps li.active{color:var(--ink);font-weight:700}
+.steps li.active::before{border-color:var(--info);color:var(--info);animation:pulse 1s steps(2) infinite}
+.steps li.done{color:var(--ink)}
+.steps li.done::before{content:"✓";background:var(--ok);border-color:var(--ok);color:var(--surface)}
+.steps li.fail::before{content:"!";background:var(--err);border-color:var(--err);color:var(--surface)}
+@keyframes pulse{50%{opacity:.35}}
+@media (prefers-reduced-motion:reduce){.steps li.active::before{animation:none}}
+.panel ul.plain,.panel ol.plain{margin:0;padding-left:20px}
+.panel li{margin:2px 0}
+.fail-item{color:var(--err);font-weight:700}
+.callout{background:var(--warn-bg);border:2px solid var(--accent);border-radius:6px;padding:10px 12px;margin:0 0 12px}
+.callout.info{background:var(--surface-2);border-color:var(--info)}
+.actions{display:flex;flex-wrap:wrap;gap:10px;margin-top:18px}
+input:not([type=checkbox]){width:100%;font:15px var(--body);color:var(--ink);background:var(--surface-2);border:2px solid var(--line);border-radius:4px;padding:8px 10px;margin:2px 0 10px}
+textarea.short{min-height:90px}
+.pre{white-space:pre-wrap}
+.ticket.team{grid-template-columns:1fr}
+label.small{display:block;color:var(--muted)}
+textarea{width:100%;min-height:170px;font:14px/1.45 var(--body);color:var(--ink);background:var(--surface-2);border:2px solid var(--line);border-left:4px solid var(--info);border-radius:4px;padding:10px 12px;resize:vertical}
+details{margin:4px 0}
+summary{cursor:pointer}
+code{font-size:13px;word-break:break-all}
+a{color:var(--info)}
+.logwrap{margin-top:26px;background:var(--surface);border:2px solid var(--line);border-radius:8px;padding:16px}
+.loghead{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
+.loghead h2{font:600 22px var(--pixel);margin:0}
+.toggle{display:flex;gap:6px;align-items:center;font-size:14px;cursor:pointer}
+.logscroll{max-height:280px;overflow:auto;margin-top:10px}
+table{border-collapse:collapse;width:100%;font-size:14px}
+th{text-align:left;font-weight:700;color:var(--muted);border-bottom:2px solid var(--line);padding:4px 8px;position:sticky;top:0;background:var(--surface)}
+td{padding:5px 8px;border-bottom:1px solid var(--line);vertical-align:top}
+td.type{color:var(--info);white-space:nowrap}
+td.time{white-space:nowrap;color:var(--muted)}
+pre{margin:0;font-size:12.5px;white-space:pre-wrap;word-break:break-word;background:var(--surface-2);padding:10px;border-radius:6px;overflow-x:auto}
+.empty{color:var(--muted);padding:10px 0}
+.connect{margin-top:16px;font-size:15px}
+.connect p{margin:0 0 8px;max-width:72ch}
+</style>
+</head>
+<body>
+<header>
+  <div>
+    <h1>Agents Office</h1>
+    <p class="sub" id="sub">Your agents at work on the sprint. Start the day, pick a ticket, and approve what they hand you.</p>
+  </div>
+  <div class="controls">
+    <span class="pill off" id="conn">Offline</span>
+    <span class="pill info" id="modePill" hidden></span>
+    <span class="small muted" id="clock">--:--</span>
+    <div class="speed" role="group" aria-label="Walking speed">
+      <button type="button" data-speed="1" aria-pressed="true">1×</button>
+      <button type="button" data-speed="2" aria-pressed="false">2×</button>
+      <button type="button" data-speed="4" aria-pressed="false">4×</button>
+    </div>
+    <button type="button" class="btn" id="crewBtn" hidden>Change crew</button>
+    <button type="button" class="btn" id="resetBtn">Reset day</button>
+  </div>
+</header>
+
+<main>
+  <div>
+    <div class="stage">
+      <canvas id="office" width="1280" height="720" role="img" aria-label="Pixel art office where the agents walk between the work board, the servers, the terminal, the workbench and your desk"></canvas>
+    </div>
+    <ul class="crew" id="crew"></ul>
+
+    <section class="logwrap" aria-labelledby="logTitle">
+      <div class="loghead">
+        <h2 id="logTitle">Event log</h2>
+        <label class="toggle"><input type="checkbox" id="rawToggle"> Show raw events</label>
+      </div>
+      <div class="logscroll" id="log" aria-live="polite"></div>
+      <div class="connect">
+        <p>Every row is an event, and the office only moves in response to events. Any script or agent can report in with the same JSON, over the WebSocket at <code>/ws</code> or with a POST. An agent the crew does not know walks in as a guest.</p>
+        <pre id="curl"></pre>
+      </div>
+    </section>
+  </div>
+
+  <aside class="panel" id="panel" aria-live="polite"></aside>
+</main>
+
+<script>
+(() => {
+const W = 320, H = 180, S = 4;
+const PIX = '"Pixelify Sans", "Trebuchet MS", sans-serif';
+const canvas = document.getElementById('office');
+const ctx = canvas.getContext('2d');
+ctx.setTransform(S, 0, 0, S, 0, 0);
+ctx.imageSmoothingEnabled = false;
+
+const STATION_SPOTS = { board:{x:52,y:46}, rack:{x:168,y:50}, terminal:{x:245,y:95}, bench:{x:92,y:120} };
+const DEFAULT_LABELS = { board:'Work board', rack:'Servers', terminal:'Terminal', bench:'Workbench', you:'Your desk', coffee:'Coffee' };
+const GUEST_LOOKS = [
+  { shirt:'#5b6b7a', hair:'#2b2340', skin:'#e0ac7e' }, { shirt:'#a3517a', hair:'#4a2c1f', skin:'#f1c7a0' },
+  { shirt:'#4f7d3a', hair:'#d8a03a', skin:'#c98e62' }, { shirt:'#7a5a2e', hair:'#1e1b2e', skin:'#f3d2b3' },
+];
+const CORRIDOR = 100;
+
+let agents = {}, order = [], speed = 1, screen = 'off', logRows = [], ws = null, online = false, teamId = null;
+let state = { view:'team', teams:[], team:null, tickets:[], results:{}, pending:null, steps:null, current:null, busy:false };
+
+const label = st => (state.team && state.team.stationLabels && state.team.stationLabels[st]) || DEFAULT_LABELS[st];
+const busyAt = st => Object.values(agents).some(a => a.state === 'working' && !a.walking && a.at === st);
+
+// Positions are computed from the agent's index, so any crew size fits.
+const homeOf = i => ({ x: 279 + (i % 3) * 13, y: 58 + Math.floor(i / 3) * 18 + (i % 2) * 4 });
+function spot(a, st){
+  const i = order.indexOf(a.id);
+  if (st === 'coffee' || !st) return homeOf(i);
+  if (st === 'you') return { x: 184 - (i % 4) * 14, y: 154 + (i % 2) * 4 };
+  const s = STATION_SPOTS[st];
+  return { x: s.x + ((i % 3) - 1) * 10, y: s.y + (i % 2) * 3 };
+}
+
+function addAgent(id, def){
+  const i = order.length;
+  order.push(id);
+  const h = homeOf(i);
+  agents[id] = { id, name:def.name, role:def.title, shirt:def.shirt, hair:def.hair, skin:def.skin, guest:!!def.guest,
+    x:h.x, y:h.y, path:[], walking:false, state:'idle', bubble:null, token:0, onArrive:null, at:'coffee' };
+  return agents[id];
+}
+function initAgents(){
+  agents = {}; order = []; screen = 'off';
+  for (const a of (state.team ? state.team.agents : [])) addAgent(a.id, a);
+}
+// An agent the crew file does not know (an external script reporting in) gets a guest character.
+function guestFor(id){
+  if (id === 'you' || order.length >= 9) return null;
+  let h = 0; for (const c of id) h = (h * 31 + c.charCodeAt(0)) >>> 0;
+  const name = id.replace(/[^a-zA-Z0-9]/g, '').slice(0, 8) || 'Guest';
+  const a = addAgent(id, { name: name[0].toUpperCase() + name.slice(1), title:'Guest agent', guest:true, ...GUEST_LOOKS[h % GUEST_LOOKS.length] });
+  renderCrew();
+  return a;
+}
+
+/* ---------- movement ---------- */
+function walk(a, target){
+  if (a.onArrive) { const f = a.onArrive; a.onArrive = null; f(); }
+  const pts = [];
+  if (Math.abs(a.y - CORRIDOR) > 0.5) pts.push({x:a.x, y:CORRIDOR});
+  pts.push({x:target.x, y:CORRIDOR});
+  pts.push({x:target.x, y:target.y});
+  a.path = pts;
+  return new Promise(res => { a.onArrive = res; });
+}
+function update(dt){
+  for (const a of Object.values(agents)) {
+    if (!a.path.length) { a.walking = false; continue; }
+    a.walking = true;
+    let budget = 46 * speed * dt;
+    while (budget > 0 && a.path.length) {
+      const p = a.path[0], dx = p.x - a.x, dy = p.y - a.y, d = Math.hypot(dx, dy);
+      if (d <= budget) { a.x = p.x; a.y = p.y; budget -= d; a.path.shift(); }
+      else { a.x += dx/d*budget; a.y += dy/d*budget; budget = 0; }
+    }
+    if (!a.path.length) {
+      a.walking = false;
+      if (a.onArrive) { const f = a.onArrive; a.onArrive = null; f(); }
+    }
+  }
+}
+
+/* ---------- events move the office ---------- */
+async function applyEvent(evt){
+  const a = agents[evt.agent] || guestFor(evt.agent);
+  if (!a) return;
+  const token = ++a.token;
+  const st = evt.station;
+  if (st) {
+    const s = spot(a, st);
+    if (Math.hypot(s.x - a.x, s.y - a.y) > 1) {
+      a.bubble = null; a.state = 'walking'; renderCrew();
+      await walk(a, s);
+      if (token !== a.token) return;
+    }
+    a.at = st;
+  }
+  a.bubble = evt.message;
+  a.state = evt.status || 'working';
+  if (a.at === 'terminal') {
+    const cmd = evt.data && evt.data.kind === 'command';
+    if (a.state === 'working') screen = cmd ? 'running' : 'typing';
+    else if (a.state === 'error') screen = 'fail';
+    else if (a.state === 'done') screen = cmd ? 'pass' : 'off';
+  }
+  if (st === 'coffee' && !busyAt('terminal')) screen = 'off';
+  if (evt.status === 'idle') setTimeout(() => { if (a.token === token) a.bubble = null; }, 2600 / speed);
+  renderCrew();
+}
+
+/* ---------- connection ---------- */
+function send(msg){ if (ws && ws.readyState === 1) ws.send(JSON.stringify(msg)); }
+function connect(){
+  ws = new WebSocket(`ws://${location.host}/ws`);
+  ws.onopen = () => { online = true; renderConn(); send({ cmd:'speed', value:speed }); };
+  ws.onclose = () => { online = false; renderConn(); setTimeout(connect, 1500); };
+  ws.onmessage = m => {
+    const msg = JSON.parse(m.data);
+    if (msg.kind === 'hello' || msg.kind === 'reset') {
+      state = msg.state; logRows = msg.log || [];
+      teamId = state.team ? state.team.id : null;
+      initAgents();
+      const latest = {};
+      for (const e of logRows) if (!latest[e.agent]) latest[e.agent] = e;
+      Object.values(latest).forEach(applyEvent);
+      renderAll();
+    } else if (msg.kind === 'state') {
+      state = msg.state;
+      const id = state.team ? state.team.id : null;
+      if (id !== teamId) { teamId = id; initAgents(); renderCrew(); }
+      renderPanel(); renderMode();
+    } else if (msg.kind === 'event') {
+      if (!msg.event.transient) { logRows.unshift(msg.event); if (logRows.length > 200) logRows.pop(); renderLog(); }
+      applyEvent(msg.event);
+    }
+  };
+}
+
+/* ---------- drawing ---------- */
+function R(x, y, w, h, c){ ctx.fillStyle = c; ctx.fillRect(x, y, w, h); }
+function text(t, x, y, size, color, align = 'left', weight = '400'){
+  ctx.font = `${weight} ${size}px ${PIX}`; ctx.fillStyle = color; ctx.textAlign = align; ctx.textBaseline = 'alphabetic';
+  ctx.fillText(t, x, y);
+}
+
+function drawScene(t){
+  R(0, 0, W, 40, '#bcd6ca');
+  R(0, 36, W, 4, '#8db2a2');
+  let row = 0;
+  for (let y = 40; y < H; y += 12, row++) {
+    let col = 0;
+    for (let x = 0; x < W; x += 12, col++) R(x, y, 12, 12, (row + col) % 2 ? '#e9d8ae' : '#e1cd9f');
+  }
+
+  // sprint board
+  const anaQuery = busyAt('board');
+  R(20, 4, 64, 30, '#4a3f5e'); R(22, 6, 60, 26, '#fbfaf5');
+  text(label('board'), 24, 11, 4.5, '#4a3f5e', 'left', '600');
+  R(41, 13, 1, 17, '#d9d4e3'); R(62, 13, 1, 17, '#d9d4e3');
+  const flash = anaQuery && Math.floor(t * 4) % 2;
+  const results = state.results || {};
+  const inProg = (state.tickets || []).filter(x => !results[x.key]).length;
+  const doneCount = Object.keys(results).length;
+  const noteC = ['#f6d65b', '#f29fb8', '#8fc7f2'];
+  R(25, 14, 6, 5, '#f6d65b'); R(33, 15, 6, 5, '#f6d65b'); R(27, 22, 6, 5, '#f6d65b');
+  for (let i = 0; i < Math.min(inProg, 6); i++) R(44 + (i % 2) * 8, 14 + Math.floor(i / 2) * 6, 6, 5, flash ? '#ffffff' : noteC[i % 3]);
+  for (let i = 0; i < Math.min(doneCount, 6); i++) R(65 + (i % 2) * 8, 14 + Math.floor(i / 2) * 6, 6, 5, '#7fd19b');
+
+  // window with provider buildings
+  R(98, 5, 46, 26, '#4a3f5e'); R(100, 7, 42, 22, '#a9d6f2');
+  R(103, 15, 9, 14, '#7d8fb8'); R(115, 11, 10, 18, '#6a7aa3'); R(128, 17, 11, 12, '#8b9cc5');
+  for (let i = 0; i < 3; i++) { R(105, 17 + i*4, 2, 2, '#fff2a8'); R(118, 13 + i*5, 2, 2, '#fff2a8'); R(131, 19 + i*3, 2, 2, '#fff2a8'); }
+  text('City', 121, 35, 3.6, '#4a5d56', 'center');
+
+  // CI rack
+  const rexBusy = busyAt('rack');
+  R(158, 2, 22, 36, '#3b3552'); R(158, 2, 22, 2, '#544b73');
+  for (let i = 0; i < 6; i++) {
+    R(161, 7 + i*5, 16, 3, '#2b2340');
+    const on = rexBusy ? Math.random() > 0.4 : (Math.floor(t * 1.5 + i) % 3 !== 0);
+    R(173, 8 + i*5, 2, 1, on ? '#62d08f' : '#2f5a42');
+    R(163, 8 + i*5, 4, 1, '#6d6590');
+  }
+
+  // coffee corner
+  R(262, 24, 54, 14, '#9c6b43'); R(262, 22, 54, 3, '#b98556');
+  R(268, 11, 11, 11, '#3b3552'); R(270, 13, 7, 3, '#e25d5d'); R(272, 18, 3, 3, '#1c1928');
+  R(285, 18, 3, 4, '#ffffff'); R(291, 18, 3, 4, '#ffffff');
+  R(305, 14, 6, 8, '#7a5236'); R(303, 6, 4, 8, '#3f9a5c'); R(308, 4, 4, 10, '#56b872'); R(306, 9, 3, 6, '#2f7f49');
+  text(label('coffee'), 289, 34, 4, '#f3e3cc', 'center', '600');
+
+  // test terminal desk
+  R(239, 80, 12, 6, '#5b4b6b');
+  R(222, 62, 46, 4, '#b98556'); R(222, 66, 46, 8, '#9c6b43'); R(224, 74, 3, 4, '#7a5236'); R(263, 74, 3, 4, '#7a5236');
+  R(233, 46, 24, 16, '#3b3552'); R(243, 60, 4, 3, '#3b3552');
+  drawTerminal(t, 235, 48, 20, 11);
+  text(label('terminal'), 245, 71, 3.8, '#f3e3cc', 'center', '600');
+
+  // bug desk
+  R(36, 108, 46, 4, '#b98556'); R(36, 112, 46, 8, '#9c6b43'); R(38, 120, 3, 4, '#7a5236'); R(77, 120, 3, 4, '#7a5236');
+  R(47, 92, 22, 16, '#3b3552');
+  const beaBusy = busyAt('bench');
+  R(49, 94, 18, 11, beaBusy ? '#fbe3dc' : '#e8e2f0');
+  R(51, 96, 8, 1, '#8a5cc2'); R(51, 98, 13, 1, '#9aa7c7'); R(51, 100, 10, 1, '#9aa7c7'); R(51, 102, 12, 1, '#9aa7c7');
+  text(label('bench'), 59, 118, 3.8, '#f3e3cc', 'center', '600');
+
+  // your desk
+  const glow = state.pending && Math.floor(t * 3) % 2;
+  R(196, 144, 70, 4, '#b98556'); R(196, 148, 70, 8, '#9c6b43'); R(198, 156, 3, 4, '#7a5236'); R(261, 156, 3, 4, '#7a5236');
+  R(213, 128, 26, 16, '#3b3552'); R(215, 130, 22, 11, '#e6ecf7');
+  R(217, 132, 6, 2, '#3a66c9'); R(217, 135, 14, 1, '#9aa7c7'); R(217, 137, 10, 1, '#9aa7c7');
+  R(245, 138, 16, 7, glow ? '#ff6b9a' : '#6d6590'); R(247, 140, 12, 3, glow ? '#ffd1df' : '#8f88ad');
+  R(224, 162, 12, 7, '#5b4b6b');
+  text(label('you'), 231, 154, 3.8, '#f3e3cc', 'center', '600');
+  if (state.pending) text('Needs you', 253, 135, 3.8, '#c92a64', 'center', '600');
+
+  // plants
+  R(6, 160, 8, 10, '#7a5236'); R(4, 150, 5, 11, '#3f9a5c'); R(10, 148, 5, 13, '#56b872');
+  R(304, 160, 8, 10, '#7a5236'); R(302, 151, 5, 10, '#56b872'); R(308, 149, 5, 12, '#3f9a5c');
+}
+
+function drawTerminal(t, x, y, w, h){
+  const colors = { off:'#2b2340', typing:'#1d2b22', running:'#1d2233', pass:'#1f4a31', fail:'#5a1f1f' };
+  R(x, y, w, h, colors[screen]);
+  if (screen === 'typing') {
+    const n = Math.floor(t * 6) % 12;
+    for (let i = 0; i < 4; i++) R(x + 2, y + 2 + i * 2, Math.min(16, (n + i * 3) % 16 + 2), 1, '#7fe0a0');
+  } else if (screen === 'running') {
+    R(x + 2, y + 4, 16, 3, '#3a3f5c');
+    R(x + 2, y + 4, Math.floor((t * 5) % 16) + 1, 3, '#86a9ff');
+  } else if (screen === 'pass') {
+    R(x + 6, y + 6, 2, 2, '#7fe0a0'); R(x + 8, y + 7, 2, 2, '#7fe0a0'); R(x + 10, y + 5, 2, 2, '#7fe0a0'); R(x + 12, y + 3, 2, 2, '#7fe0a0');
+  } else if (screen === 'fail') {
+    for (let i = 0; i < 6; i++) { R(x + 7 + i, y + 2 + i, 1, 1, '#ff8f8f'); R(x + 12 - i, y + 2 + i, 1, 1, '#ff8f8f'); }
+  }
+}
+
+function drawAgent(a, t){
+  const step = a.walking ? Math.floor(t * 8) % 2 : 0;
+  const jump = a.state === 'done' && !a.walking ? Math.round(Math.abs(Math.sin(t * 7)) * 3) : 0;
+  const x = Math.round(a.x), gy = Math.round(a.y), y = gy - jump;
+  R(x - 5, gy, 10, 2, 'rgba(43,35,64,.25)');
+  R(x - 3, y - 4, 2, step ? 3 : 4, '#2b2340');
+  R(x + 1, y - 4, 2, step ? 4 : 3, '#2b2340');
+  if (!a.walking) { R(x - 3, y - 4, 2, 4, '#2b2340'); R(x + 1, y - 4, 2, 4, '#2b2340'); }
+  R(x - 4, y - 11, 8, 7, a.shirt);
+  const typing = a.state === 'working' && !a.walking ? Math.floor(t * 10) % 2 : 0;
+  R(x - 5, y - 10 + typing, 1, 4, a.shirt);
+  if (a.state === 'waiting' && !a.walking) {
+    const wave = Math.floor(t * 4) % 2;
+    R(x + 4, y - 14, 1, 4, a.shirt); R(x + 4 + wave, y - 17, 2, 3, a.skin);
+  } else {
+    R(x + 4, y - 10, 1, 4, a.shirt);
+  }
+  R(x - 3, y - 17, 6, 6, a.skin);
+  R(x - 3, y - 18, 6, 2, a.hair); R(x - 3, y - 17, 1, 3, a.hair);
+  R(x - 2, y - 15, 1, 1, '#2b2340'); R(x + 1, y - 15, 1, 1, '#2b2340');
+  if (a.state === 'error') R(x - 1, y - 12, 2, 1, '#2b2340');
+  text(a.name, x, gy + 7, 5, '#2b2340', 'center', '600');
+}
+
+function wrap(str, maxW){
+  const words = String(str).split(' '), lines = [];
+  let line = '';
+  for (const w of words) {
+    const test = line ? line + ' ' + w : w;
+    if (ctx.measureText(test).width > maxW && line) { lines.push(line); line = w; }
+    else line = test;
+  }
+  if (line) lines.push(line);
+  return lines.slice(0, 5);
+}
+
+function drawBubble(a, t){
+  if (!a.bubble || a.walking) return;
+  ctx.font = `400 4.8px ${PIX}`;
+  const lines = wrap(a.bubble, 66);
+  const lh = 5.6;
+  const w = Math.ceil(Math.max(...lines.map(l => ctx.measureText(l).width))) + 6;
+  const h = Math.ceil(lines.length * lh) + 4;
+  let bx = Math.round(a.x - w / 2); bx = Math.max(2, Math.min(W - w - 2, bx));
+  let by = Math.round(a.y - 22 - h); if (by < 3) by = 3;
+  const border = a.state === 'waiting' ? '#c92a64' : a.state === 'error' ? '#b53f0c' : '#2b2340';
+  R(bx - 1, by - 1, w + 2, h + 2, border);
+  R(bx, by, w, h, '#ffffff');
+  const tx = Math.max(bx + 2, Math.min(bx + w - 4, Math.round(a.x) - 1));
+  R(tx, by + h + 1, 2, 2, border);
+  lines.forEach((l, i) => text(l, bx + 3, by + 2 + (i + 1) * lh - 1.3, 4.8, '#2b2340', 'left'));
+  if (a.state === 'waiting') {
+    const bob = Math.floor(t * 3) % 2;
+    R(bx + w - 5, by - 7 - bob, 7, 7, '#c92a64');
+    text('!', bx + w - 1.5, by - 1.6 - bob, 6, '#ffffff', 'center', '600');
+  } else if (a.state === 'working') {
+    const n = Math.floor(t * 3) % 4;
+    for (let i = 0; i < n; i++) R(bx + w - 9 + i * 3, by + h - 2, 2, 1, '#6d6590');
+  } else if (a.state === 'done') {
+    R(bx + w - 5, by - 6, 6, 6, '#23804a');
+    R(bx + w - 4, by - 3, 1, 1, '#fff'); R(bx + w - 3, by - 2, 1, 1, '#fff'); R(bx + w - 2, by - 3, 1, 1, '#fff'); R(bx + w - 1, by - 4, 1, 1, '#fff');
+  }
+}
+
+let last = performance.now();
+function frame(now){
+  const dt = Math.min(0.05, (now - last) / 1000); last = now;
+  const t = now / 1000;
+  update(dt);
+  ctx.clearRect(0, 0, W, H);
+  drawScene(t);
+  const list = Object.values(agents).sort((p, q) => p.y - q.y);
+  list.forEach(a => drawAgent(a, t));
+  list.forEach(a => drawBubble(a, t));
+  requestAnimationFrame(frame);
+}
+
+/* ---------- UI ---------- */
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]));
+const safeUrl = u => (/^https?:\/\//.test(u || '') ? esc(u) : '');
+const panel = document.getElementById('panel');
+let panelSig = '';
+
+function notices(){
+  const out = [];
+  if (state.error) out.push(`<div class="callout"><strong>Something went wrong.</strong> ${esc(state.error)}</div>`);
+  if (state.notice) out.push(`<div class="callout info small">${esc(state.notice)}</div>`);
+  if (state.mode === 'mock') out.push(`<div class="callout info small">Simulated sprint. Nothing here touches Jira, a model or your code. Run <code>npm start</code> for the real office.</div>`);
+  else {
+    if (!state.jiraReady) out.push(`<div class="callout small"><strong>Jira is not connected.</strong> Copy <code>.env.example</code> to <code>.env</code>, fill it in and restart.</div>`);
+    else if (!state.project) out.push(`<div class="callout small">Set <code>jira.project</code> in <code>office.config.json</code> to your Jira project key and restart.</div>`);
+    else if (state.dryRun) out.push(`<div class="callout info small"><strong>Jira is in dry run.</strong> Approved comments and issues are drafted but not written. Set <code>jira.writeEnabled</code> to <code>true</code> to write them after your approval.</div>`);
+    if (state.workspaceReady === false) out.push(`<div class="callout info small">No code workspace is set, so steps that read or write code are skipped. Set <code>workspace.repoDir</code> to use them.</div>`);
+  }
+  return out.join('');
+}
+
+function sectionHtml(s){
+  if (s.items) {
+    if (!s.items.length) return '';
+    return `<h3>${esc(s.title)}</h3><ul class="plain small">${s.items.map(i => `<li>${esc(i.text)}${i.sub ? `<br><span class="muted pre">${esc(i.sub)}</span>` : ''}</li>`).join('')}</ul>`;
+  }
+  if (s.code) return `<h3>${esc(s.title)}</h3><pre>${esc(s.code)}</pre>`;
+  return s.text ? `<h3>${esc(s.title)}</h3><p class="small pre">${esc(s.text)}</p>` : '';
+}
+
+function renderPanel(){
+  const sig = JSON.stringify([state.view, state.busy, state.teams, state.team && state.team.id, state.tickets, state.results, state.current, state.steps, state.pending, state.error, state.notice, state.dryRun, online]);
+  if (sig === panelSig) return;
+  panelSig = sig;
+  const v = state.view;
+  document.getElementById('crewBtn').hidden = !state.team || v === 'team' || v === 'creating';
+
+  if (v === 'team') {
+    panel.innerHTML = `
+      <h2>Who is working today?</h2>
+      ${notices()}
+      <p>Pick the crew that fits your role, or describe your role and get a crew designed for it.</p>
+      <ol class="tickets">
+        ${state.teams.map(t => `<li><button class="ticket team" data-team="${esc(t.id)}" ${online ? '' : 'disabled'}>
+          <span class="tkey">${esc(t.role)}${t.custom ? '<span class="badge muted">yours</span>' : ''}</span>
+          <span class="tsum">${esc(t.name)}</span>
+          <span class="why">${esc(t.description)}</span>
+          <span class="tmeta">${esc(t.agents.join(' · '))}</span>
+        </button></li>`).join('')}
+      </ol>
+      <h3>Create my own crew</h3>
+      <form id="newTeam">
+        <label class="small" for="role">Your role</label>
+        <input id="role" required maxlength="120" placeholder="For example: data analyst, DevOps engineer, support lead">
+        <label class="small" for="day">What your day with Jira tickets looks like (optional, but it helps)</label>
+        <textarea id="day" class="short" maxlength="2000" placeholder="Where the work comes from, what you do with a ticket, and what you hand over to whom."></textarea>
+        <div class="actions"><button class="btn primary" ${online ? '' : 'disabled'}>Design my crew</button></div>
+      </form>
+      ${(state.teamProblems || []).length ? `<p class="small muted">Skipped crew files: ${esc(state.teamProblems.join(' | '))}</p>` : ''}`;
+    panel.querySelectorAll('[data-team]').forEach(b => b.onclick = () => send({ cmd:'selectTeam', id:b.dataset.team }));
+    panel.querySelector('#newTeam').onsubmit = e => {
+      e.preventDefault();
+      send({ cmd:'createTeam', role: panel.querySelector('#role').value, day: panel.querySelector('#day').value });
+    };
+  } else if (v === 'creating') {
+    panel.innerHTML = `<h2>Designing your crew</h2>${notices()}<p class="muted small">The new crew is checked against the crew rules before it is saved to <code>teams/custom/</code>.</p>`;
+  } else if (v === 'start') {
+    const t = state.team;
+    panel.innerHTML = `
+      <h2>Good morning</h2>
+      ${notices()}
+      <p><strong>${esc(t.name)}</strong> for a ${esc(t.role)}. ${esc(t.description)}</p>
+      <p class="muted small">${esc(t.agents[0].name)} reads Jira and brings you a ranked list. You pick a ticket, the crew works on it, and nothing is run or written to Jira without your approval.</p>
+      <div class="actions"><button class="btn primary" id="startBtn" ${online ? '' : 'disabled'}>Start the day</button></div>`;
+    panel.querySelector('#startBtn').onclick = () => send({ cmd:'startDay' });
+  } else if (v === 'loading') {
+    panel.innerHTML = `<h2>Preparing your briefing</h2><p>Reading Jira.</p><h3>The query</h3><pre>${esc(state.jql)}</pre>`;
+  } else if (v === 'pick') {
+    const results = state.results;
+    const open = state.tickets.filter(t => t.selectable !== false && !results[t.key]);
+    const intro = Object.keys(results).length === 0 ? `<p>Here is today's ranked list. Pick the ticket you want the crew to start on.</p>`
+      : open.length ? `<p>Pick your next ticket.</p>` : `<p>Every ticket on the list has been handled. Reset the day to start over.</p>`;
+    panel.innerHTML = `
+      <h2>Your list</h2>
+      ${notices()}
+      ${intro}
+      <ol class="tickets">
+        ${state.tickets.map((t, i) => {
+          const r = results[t.key];
+          const disabled = t.selectable === false || (r && r.tone !== 'muted') || state.busy;
+          const blocked = t.blocked ? `<span class="badge err">Blocked${t.blockedBy && t.blockedBy.length ? ' by ' + esc(t.blockedBy.map(b => b.key).join(', ')) : ''}</span>` : '';
+          const na = t.actionable === false ? '<span class="badge muted">Nothing to do</span>' : '';
+          const meta = [t.type, t.status, t.priority ? t.priority + ' priority' : '', t.assignee].filter(Boolean).join(', ');
+          return `<li><button class="ticket" data-key="${esc(t.key)}" ${disabled ? 'disabled' : ''}>
+            <span class="rank" aria-hidden="true">${i + 1}</span>
+            <span class="tkey">${esc(t.key)}${blocked}${na}${r ? `<span class="badge ${esc(r.tone)}">${esc(r.label)}</span>` : ''}</span>
+            <span class="tsum">${esc(t.summary)}</span>
+            <span class="tmeta">${esc(meta)}</span>
+            <span class="why">${esc(t.why || '')}</span>
+          </button></li>`;
+        }).join('')}
+      </ol>`;
+    panel.querySelectorAll('[data-key]').forEach(b => b.onclick = () => send({ cmd:'selectTicket', key:b.dataset.key }));
+  } else if (v === 'work') {
+    const c = state.current, link = safeUrl(c.url);
+    panel.innerHTML = `
+      <h2>Working on ${link ? `<a href="${link}" target="_blank" rel="noopener">${esc(c.key)}</a>` : esc(c.key)}</h2>
+      <p>${esc(c.summary)}</p>
+      <h3>Progress</h3>
+      <ol class="steps">${(state.steps || []).map(s => `<li class="${esc(s.state)}">${esc(s.label)}</li>`).join('')}</ol>
+      ${c.sections.map(sectionHtml).join('')}`;
+  } else if (v === 'approve') {
+    const p = state.pending;
+    panel.innerHTML = `
+      <h2>${esc(p.title)}</h2>
+      ${p.message ? `<div class="callout">${esc(p.message)}</div>` : ''}
+      ${(p.warnings || []).map(w => `<div class="callout small"><strong>Check this first.</strong> ${esc(w)}</div>`).join('')}
+      ${p.sections.map(sectionHtml).join('')}
+      ${p.input ? `<h3><label for="input">${esc(p.input.label)}</label></h3><textarea id="input">${esc(p.input.value)}</textarea>` : ''}
+      <div class="actions">${p.actions.map(a => `<button class="btn ${a.primary ? 'primary' : ''}" data-act="${esc(a.id)}">${esc(a.label)}</button>`).join('')}</div>`;
+    panel.querySelectorAll('[data-act]').forEach(b => b.onclick = () => {
+      const ta = panel.querySelector('#input');
+      panel.querySelectorAll('[data-act]').forEach(x => { x.disabled = true; });
+      send({ cmd:'decide', action:b.dataset.act, input: ta ? ta.value : undefined });
+    });
+  }
+}
+
+function renderCrew(){
+  const labels = { idle:'Idle', walking:'Walking', working:'Working', waiting:'Waiting for you', done:'Done', error:'Found a problem' };
+  const list = Object.values(agents);
+  document.getElementById('crew').innerHTML = list.length ? list.map(a => `
+    <li><span class="swatch" style="background:${esc(a.shirt)}"></span>
+      <span><b>${esc(a.name)}</b><span class="role">${esc(a.role)}</span>
+      <span class="now" style="${a.state === 'waiting' ? 'color:var(--accent);font-weight:700' : ''}">${labels[a.state] || esc(a.state)}</span></span></li>`).join('')
+    : '<li><span class="muted small">The office is empty. Pick a crew to fill it.</span></li>';
+}
+
+function renderLog(){
+  const el = document.getElementById('log');
+  if (!logRows.length) { el.innerHTML = '<p class="empty">No events yet. Start the day to see your agents report in.</p>'; return; }
+  if (document.getElementById('rawToggle').checked) {
+    el.innerHTML = `<pre>${logRows.map(r => esc(JSON.stringify(r))).join('\n')}</pre>`;
+  } else {
+    const who = id => (agents[id] ? agents[id].name : id === 'you' ? 'You' : id);
+    el.innerHTML = `<table><thead><tr><th>Time</th><th>Agent</th><th>Event</th><th>What happened</th></tr></thead><tbody>
+      ${logRows.map(r => `<tr><td class="time">${esc(r.ts)}</td><td>${esc(who(r.agent))}</td><td class="type">${esc(r.type)}</td><td>${esc(r.message)}</td></tr>`).join('')}
+    </tbody></table>`;
+  }
+}
+
+function renderConn(){
+  const el = document.getElementById('conn');
+  el.textContent = online ? 'Connected' : 'Offline';
+  el.className = 'pill ' + (online ? 'on' : 'off');
+  renderPanel();
+}
+function renderMode(){
+  const el = document.getElementById('modePill');
+  el.hidden = !state.mode;
+  el.textContent = state.mode === 'mock' ? 'Simulated' : state.dryRun ? 'Live, Jira dry run' : 'Live';
+  document.getElementById('sub').textContent = state.team
+    ? `${state.team.name} at work for a ${state.team.role}. Start the day, pick a ticket, and approve what they hand you.`
+    : 'An office run by AI agents. Pick the crew for your role, or have one designed for you.';
+}
+function renderAll(){ renderPanel(); renderCrew(); renderLog(); renderMode(); }
+
+document.getElementById('curl').textContent =
+`curl -X POST http://${location.host}/events -H 'content-type: application/json' -d '{
+  "agent": "buildbot", "type": "build.finished", "status": "done", "station": "rack",
+  "ticket": "ABC-123", "message": "Build 512 is green" }'`;
+document.getElementById('rawToggle').onchange = renderLog;
+document.querySelectorAll('.speed button').forEach(b => b.onclick = () => {
+  speed = Number(b.dataset.speed);
+  document.querySelectorAll('.speed button').forEach(x => x.setAttribute('aria-pressed', x === b ? 'true' : 'false'));
+  send({ cmd:'speed', value:speed });
+});
+const confirmBusy = () => !state.busy || confirm('The agents are in the middle of something. This stops them. Continue?');
+document.getElementById('resetBtn').onclick = () => { if (confirmBusy()) send({ cmd:'reset' }); };
+document.getElementById('crewBtn').onclick = () => { if (!state.busy) send({ cmd:'changeTeam' }); else alert('Wait for the crew to finish, or reset the day first.'); };
+setInterval(() => { const d = new Date(); document.getElementById('clock').textContent = String(d.getHours()).padStart(2,'0') + ':' + String(d.getMinutes()).padStart(2,'0'); }, 1000);
+
+initAgents();
+renderAll();
+connect();
+(document.fonts && document.fonts.ready ? document.fonts.ready : Promise.resolve()).then(() => requestAnimationFrame(frame));
+})();
+</script>
+</body>
+</html>

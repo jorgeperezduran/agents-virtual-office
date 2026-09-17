@@ -1,0 +1,16 @@
+{
+  "name": "agents-office-generic",
+  "version": "0.1.0",
+  "private": true,
+  "description": "A pixel-art office run by AI agent crews you choose or create for your role. Works with any Jira site.",
+  "type": "module",
+  "engines": { "node": ">=20" },
+  "scripts": {
+    "start": "node server/index.js",
+    "mock": "node server/index.js --mock",
+    "test": "node --test test/",
+    "jira": "node skills/jira-stories/scripts/jira.mjs",
+    "install-skill": "node scripts/install-skill.mjs"
+  },
+  "dependencies": { "ws": "^8.18.0" }
+}

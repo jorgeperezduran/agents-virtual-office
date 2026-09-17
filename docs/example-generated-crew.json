@@ -1,0 +1,652 @@
+{
+  "id": "custom-devops-engineer",
+  "name": "Change & rollout crew",
+  "role": "DevOps engineer",
+  "description": "Turns one infrastructure or incident ticket into a risk-assessed rollout and rollback plan, posts it on the ticket and files the follow-up work.",
+  "stationLabels": {
+    "board": "Ticket queue",
+    "rack": "Infra rack",
+    "terminal": "Runbook terminal",
+    "bench": "Change desk",
+    "you": "Your desk"
+  },
+  "agents": [
+    {
+      "id": "ivy",
+      "name": "Ivy",
+      "title": "Change Analyst",
+      "shirt": "#3a66c9",
+      "hair": "#4a2c1f",
+      "skin": "#f1c7a0"
+    },
+    {
+      "id": "rex",
+      "name": "Rex",
+      "title": "Risk Assessor",
+      "shirt": "#d0492f",
+      "hair": "#1e1b2e",
+      "skin": "#8d5a3b"
+    },
+    {
+      "id": "kai",
+      "name": "Kai",
+      "title": "Rollout & Rollback Planner",
+      "shirt": "#23804a",
+      "hair": "#d8a03a",
+      "skin": "#c98e62"
+    },
+    {
+      "id": "nia",
+      "name": "Nia",
+      "title": "Handover Writer",
+      "shirt": "#8a5cc2",
+      "hair": "#2b2b35",
+      "skin": "#f3d2b3"
+    }
+  ],
+  "briefing": {
+    "agent": "ivy",
+    "jql": "project = {{project}} AND {{scope}} AND statusCategory in (\"To Do\", \"In Progress\") ORDER BY priority DESC, updated ASC",
+    "rankPrompt": "You plan a DevOps engineer's day. Put first the incident follow-ups and anything that unblocks other people or has a deadline, then infrastructure change requests by priority and age, then routine maintenance. Mark as not actionable the tickets that are purely commercial, legal, design or product discussion, and the ones that ask for no infrastructure change at all."
+  },
+  "workflow": [
+    {
+      "id": "change",
+      "type": "think",
+      "agent": "ivy",
+      "station": "board",
+      "label": "Work out what has to change",
+      "message": "Reading {{ticket.key}}",
+      "doneMessage": "{{spec.targets|count}} targets identified",
+      "prompt": "You are a DevOps engineer reading one Jira ticket. Work out exactly what infrastructure change is being asked for.\n\nUse ONLY what the ticket says. Never invent systems, environments, hostnames, owners, dates or incident details that are not written in the ticket. Anything you need but cannot find in the ticket goes into openQuestions, not into the plan.\n\nReturn:\n- goal: one sentence on the outcome the requester wants.\n- kind: whether this is an infrastructure change or an incident follow-up.\n- targets: the concrete things to change (service, pipeline, cluster, config, alert, access), each with what changes and where it is stated in the ticket.\n- environments: environments named in the ticket, or an empty list if none are named.\n- openQuestions: what the ticket does not say and you would have to ask the requester.\n\nTicket {{ticket.key}}: {{ticket.summary}}\nType: {{ticket.type}} | Status: {{ticket.status}} | Priority: {{ticket.priority}}\n\n{{ticket.description}}",
+      "schema": {
+        "type": "object",
+        "properties": {
+          "goal": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "infrastructure change",
+              "incident follow-up"
+            ]
+          },
+          "targets": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "title": {
+                  "type": "string"
+                },
+                "description": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "environments": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "openQuestions": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "save": "spec",
+      "tools": "none",
+      "show": [
+        {
+          "title": "Goal",
+          "path": "spec.goal"
+        },
+        {
+          "title": "What has to change",
+          "path": "spec.targets"
+        },
+        {
+          "title": "Open questions",
+          "path": "spec.openQuestions"
+        }
+      ]
+    },
+    {
+      "id": "locate",
+      "type": "think",
+      "agent": "ivy",
+      "station": "terminal",
+      "label": "Find the files that hold the change",
+      "tools": "read",
+      "message": "Looking for the infrastructure files behind {{ticket.key}}",
+      "doneMessage": "{{files.files|count}} files located",
+      "prompt": "Find the files in THIS repository that would have to change to deliver the change below. Look at infrastructure as code, deployment manifests, pipeline definitions, environment configuration and their documentation.\n\nRules:\n- Return paths relative to the repository root, exactly as they exist. Never guess a path that you did not open or list.\n- Return at most 6 files, fewer or none when nothing in the repository clearly matches.\n- Never read or quote .env files or any secret material.\n- Do not invent repository contents, and do not add anything the ticket does not ask for.\n\nGoal: {{spec.goal}}\nTargets:\n{{spec.targets|titles}}\nEnvironments named in the ticket: {{spec.environments|titles}}\n\nTicket {{ticket.key}}: {{ticket.summary}}\n\n{{ticket.description}}",
+      "schema": {
+        "type": "object",
+        "properties": {
+          "files": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "file": {
+                  "type": "string"
+                },
+                "reason": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "summary": {
+            "type": "string"
+          }
+        }
+      },
+      "save": "files",
+      "show": [
+        {
+          "title": "Files to touch",
+          "path": "files.files"
+        }
+      ]
+    },
+    {
+      "id": "risk",
+      "type": "think",
+      "agent": "rex",
+      "station": "rack",
+      "label": "Check the risk",
+      "message": "Sizing the blast radius of {{ticket.key}}",
+      "doneMessage": "Risk assessed: {{risk.level}}",
+      "prompt": "Assess the risk of the change below as a DevOps engineer would before touching anything.\n\nUse ONLY the ticket and the located files. Never invent traffic numbers, SLAs, incident history, dependencies or owners that are not in the ticket. If something matters but is unknown, say so in unknowns.\n\nReturn:\n- level: low, medium or high, judged on blast radius and reversibility.\n- blastRadius: one sentence on who or what breaks if this goes wrong.\n- risks: each with a title, why it matters, and how to reduce it.\n- preChecks: what must be true or verified before starting.\n- signals: what to watch during and after the change, named only if the ticket or the files mention it, otherwise described generically.\n- unknowns: facts the ticket does not give that change the risk.\n\nGoal: {{spec.goal}} ({{spec.kind}})\nTargets:\n{{spec.targets|titles}}\nFiles: {{files.files[].file}}\nOpen questions from the ticket:\n{{spec.openQuestions|titles}}\n\nTicket {{ticket.key}}: {{ticket.summary}}\nPriority: {{ticket.priority}}\n\n{{ticket.description}}",
+      "schema": {
+        "type": "object",
+        "properties": {
+          "level": {
+            "type": "string",
+            "enum": [
+              "low",
+              "medium",
+              "high"
+            ]
+          },
+          "blastRadius": {
+            "type": "string"
+          },
+          "risks": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "title": {
+                  "type": "string"
+                },
+                "why": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "preChecks": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "signals": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "unknowns": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "save": "risk",
+      "tools": "none",
+      "show": [
+        {
+          "title": "Blast radius",
+          "path": "risk.blastRadius"
+        },
+        {
+          "title": "Risks",
+          "path": "risk.risks"
+        },
+        {
+          "title": "Pre-flight checks",
+          "path": "risk.preChecks"
+        },
+        {
+          "title": "Unknowns",
+          "path": "risk.unknowns"
+        }
+      ]
+    },
+    {
+      "id": "plan",
+      "type": "think",
+      "agent": "kai",
+      "station": "terminal",
+      "label": "Write the rollout and rollback plan",
+      "message": "Writing the rollout and rollback plan for {{ticket.key}}",
+      "doneMessage": "Plan ready: {{plan.rollout|count}} rollout steps",
+      "prompt": "Write the rollout and rollback plan for this change, in the order a DevOps engineer would execute it.\n\nUse ONLY the ticket, the located files and the risk assessment below. Never invent commands, tool names, pipeline names, environments or approvers that are not in that material; where a specific command is unknown, describe the action instead of guessing a command. Never write anything that touches production without an explicit verification and rollback step.\n\nReturn:\n- rollout: ordered steps, each with a title and what proves it worked.\n- verification: how you confirm the change is good after the last step.\n- rollback: ordered steps that undo the change, and rollbackTrigger: the condition that makes you roll back.\n- followUps: separate pieces of work this ticket creates for someone (documentation, monitoring, clean-up, an answer needed from the requester). Each with summary, why and kind. Return an empty list when the ticket creates none.\n- summary: two sentences a requester can read.\n\nGoal: {{spec.goal}} ({{spec.kind}})\nRisk level: {{risk.level}} - {{risk.blastRadius}}\nPre-flight checks:\n{{risk.preChecks|titles}}\nRisks:\n{{risk.risks|json}}\nFiles: {{files.files[].file}}\n\nTicket {{ticket.key}}: {{ticket.summary}}\n\n{{ticket.description}}",
+      "schema": {
+        "type": "object",
+        "properties": {
+          "rollout": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "title": {
+                  "type": "string"
+                },
+                "description": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "verification": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "rollback": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "title": {
+                  "type": "string"
+                },
+                "description": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "rollbackTrigger": {
+            "type": "string"
+          },
+          "followUps": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "summary": {
+                  "type": "string"
+                },
+                "why": {
+                  "type": "string"
+                },
+                "kind": {
+                  "type": "string",
+                  "enum": [
+                    "documentation",
+                    "monitoring",
+                    "clean-up",
+                    "question",
+                    "other"
+                  ]
+                }
+              }
+            }
+          },
+          "summary": {
+            "type": "string"
+          }
+        }
+      },
+      "save": "plan",
+      "tools": "none",
+      "show": [
+        {
+          "title": "Rollout",
+          "path": "plan.rollout"
+        },
+        {
+          "title": "Verification",
+          "path": "plan.verification"
+        },
+        {
+          "title": "Rollback",
+          "path": "plan.rollback"
+        },
+        {
+          "title": "Follow-up work",
+          "path": "plan.followUps"
+        }
+      ]
+    },
+    {
+      "id": "lint-files",
+      "type": "command",
+      "agent": "kai",
+      "station": "rack",
+      "label": "Lint the files the change touches",
+      "command": "lint",
+      "files": [
+        "files.files[].file"
+      ],
+      "save": "checks",
+      "onSkip": "review"
+    },
+    {
+      "id": "lint-failed",
+      "type": "branch",
+      "when": {
+        "path": "checks.failed",
+        "op": "gt",
+        "value": 0
+      },
+      "goto": "lint-note"
+    },
+    {
+      "id": "review",
+      "type": "gate",
+      "agent": "kai",
+      "station": "you",
+      "label": "Approve the plan",
+      "title": "{{ticket.key}}: {{risk.level}} risk change plan",
+      "message": "{{plan.summary}}",
+      "show": [
+        {
+          "title": "Rollout",
+          "path": "plan.rollout"
+        },
+        {
+          "title": "Rollback",
+          "path": "plan.rollback"
+        },
+        {
+          "title": "Risks",
+          "path": "risk.risks"
+        },
+        {
+          "title": "Unknowns",
+          "path": "risk.unknowns"
+        },
+        {
+          "title": "Pre-flight blockers",
+          "path": "checknote.blockers"
+        }
+      ],
+      "input": {
+        "label": "Anything to add for the requester",
+        "value": "",
+        "save": "note"
+      },
+      "actions": [
+        {
+          "id": "continue",
+          "label": "Post the plan on the ticket",
+          "primary": true
+        },
+        {
+          "id": "rework",
+          "label": "Ask for a safer, staged plan",
+          "goto": "replan",
+          "once": true
+        },
+        {
+          "id": "stop",
+          "label": "Not now",
+          "result": {
+            "label": "Plan held back",
+            "tone": "muted"
+          }
+        }
+      ]
+    },
+    {
+      "id": "handover",
+      "type": "think",
+      "agent": "nia",
+      "station": "bench",
+      "label": "Write the ticket update",
+      "message": "Writing the update for the requester",
+      "doneMessage": "Handover ready",
+      "prompt": "Write the comment the DevOps engineer will leave on this ticket for the requester. Plain, short, no marketing tone.\n\nUse ONLY the material below. Never invent a status, a date, an owner or a result that is not there. Do not claim the change has been applied: this plan has not been executed yet. Open questions and unknowns must be listed as questions for the requester, not answered.\n\nReturn:\n- intro: two sentences saying what will change and why, in the requester's language.\n- questions: what you need back from the requester before starting, or an empty list.\n- nextStep: one sentence on what happens next and who does it, based only on what is known.\n\nGoal: {{spec.goal}}\nPlan summary: {{plan.summary}}\nRisk: {{risk.level}} - {{risk.blastRadius}}\nOpen questions: {{spec.openQuestions|titles}}\nUnknowns: {{risk.unknowns|titles}}\nEngineer's note: {{note}}\n\nTicket {{ticket.key}}: {{ticket.summary}}\n\n{{ticket.description}}",
+      "schema": {
+        "type": "object",
+        "properties": {
+          "intro": {
+            "type": "string"
+          },
+          "questions": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "nextStep": {
+            "type": "string"
+          }
+        }
+      },
+      "save": "hand",
+      "tools": "none",
+      "show": [
+        {
+          "title": "For the requester",
+          "path": "hand.intro"
+        },
+        {
+          "title": "Questions back",
+          "path": "hand.questions"
+        }
+      ]
+    },
+    {
+      "id": "post-plan",
+      "type": "jira",
+      "agent": "nia",
+      "label": "Post the plan on the ticket",
+      "action": "comment",
+      "approveLabel": "Post plan comment",
+      "body": "Change plan for {{ticket.key}} ({{today}})\n\n{{hand.intro}}\n\n# Risk: {{risk.level}}\n{{risk.blastRadius}}\n\n# Pre-flight checks\n{{risk.preChecks|numbered}}\n\n# Rollout\n{{plan.rollout|numbered}}\n\n# Verification\n{{plan.verification|numbered}}\n\n# Rollback (trigger: {{plan.rollbackTrigger}})\n{{plan.rollback|numbered}}\n\n# Files in scope\n{{files.files[].file}}\n\n# Open questions for the requester\n{{hand.questions|numbered}}\n\n# Next step\n{{hand.nextStep}}\n\nNote from the engineer: {{note}}",
+      "save": "posted",
+      "onSkip": "not-posted"
+    },
+    {
+      "id": "has-followups",
+      "type": "branch",
+      "when": {
+        "path": "plan.followUps",
+        "op": "gt",
+        "value": 0
+      },
+      "goto": "file-followups",
+      "else": "planned"
+    },
+    {
+      "id": "file-followups",
+      "type": "jira",
+      "agent": "nia",
+      "label": "File the follow-up work",
+      "action": "create",
+      "approveLabel": "Create follow-up issues",
+      "from": "plan.followUps",
+      "issueType": "{{issueTypes.task}}",
+      "summary": "{{item.summary}}",
+      "body": "Follow-up from the change plan on {{ticket.key}}: {{ticket.summary}}\n\nWhy: {{item.why}}\nKind: {{item.kind}}\n\nSource plan: {{ticket.url}}",
+      "linkTo": "{{ticket.key}}",
+      "linkType": "{{linkTypes.relates}}",
+      "save": "filed",
+      "onSkip": "planned"
+    },
+    {
+      "id": "planned-with-followups",
+      "type": "end",
+      "result": {
+        "label": "Plan posted, follow-ups {{filed.keysText}}",
+        "tone": "ok"
+      }
+    },
+    {
+      "id": "lint-note",
+      "type": "think",
+      "agent": "rex",
+      "station": "rack",
+      "label": "Fold the lint failures into the plan",
+      "message": "Reading the lint failures",
+      "doneMessage": "{{checknote.blockers|count}} pre-flight blockers",
+      "prompt": "The lint command failed on the files this change touches. Turn the failures into pre-flight blockers for the plan.\n\nUse ONLY the failures below and the ticket. Never invent an error, a file or a cause you cannot see in the output. If a failure is unrelated to this change, say so in the blocker's why.\n\nReturn blockers, each with a title and why it must be fixed or accepted before rollout, and a one-sentence summary.\n\nLint summary: {{checks.summary}}\nFailures:\n{{checks.failures|json}}\n\nTicket {{ticket.key}}: {{ticket.summary}}\nFiles: {{files.files[].file}}",
+      "schema": {
+        "type": "object",
+        "properties": {
+          "blockers": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "title": {
+                  "type": "string"
+                },
+                "why": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "summary": {
+            "type": "string"
+          }
+        }
+      },
+      "save": "checknote",
+      "tools": "none",
+      "show": [
+        {
+          "title": "Pre-flight blockers",
+          "path": "checknote.blockers"
+        }
+      ],
+      "goto": "review"
+    },
+    {
+      "id": "replan",
+      "type": "think",
+      "agent": "kai",
+      "station": "terminal",
+      "label": "Stage the change more safely",
+      "message": "Rewriting the plan in smaller stages",
+      "doneMessage": "Safer plan ready: {{plan.rollout|count}} steps",
+      "prompt": "The DevOps engineer read the plan below and asked for a safer, more staged version. Rewrite it so the change lands in smaller reversible stages, with an explicit verification and a rollback point after each stage.\n\nUse ONLY the ticket, the files and the risk assessment. Never invent commands, environments or approvals that are not in that material. Keep the same goal: do not widen the scope.\n\nReturn the same structure as before: rollout, verification, rollback, rollbackTrigger, followUps, summary.\n\nPrevious rollout:\n{{plan.rollout|numbered}}\nPrevious rollback:\n{{plan.rollback|numbered}}\nRisk: {{risk.level}} - {{risk.blastRadius}}\nPre-flight blockers: {{checknote.blockers|titles}}\nEngineer's note: {{note}}\n\nTicket {{ticket.key}}: {{ticket.summary}}\n\n{{ticket.description}}",
+      "schema": {
+        "type": "object",
+        "properties": {
+          "rollout": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "title": {
+                  "type": "string"
+                },
+                "description": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "verification": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "rollback": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "title": {
+                  "type": "string"
+                },
+                "description": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "rollbackTrigger": {
+            "type": "string"
+          },
+          "followUps": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "summary": {
+                  "type": "string"
+                },
+                "why": {
+                  "type": "string"
+                },
+                "kind": {
+                  "type": "string",
+                  "enum": [
+                    "documentation",
+                    "monitoring",
+                    "clean-up",
+                    "question",
+                    "other"
+                  ]
+                }
+              }
+            }
+          },
+          "summary": {
+            "type": "string"
+          }
+        }
+      },
+      "save": "plan",
+      "tools": "none",
+      "show": [
+        {
+          "title": "Rollout",
+          "path": "plan.rollout"
+        },
+        {
+          "title": "Rollback",
+          "path": "plan.rollback"
+        }
+      ],
+      "goto": "review"
+    },
+    {
+      "id": "planned",
+      "type": "end",
+      "result": {
+        "label": "Plan posted on {{ticket.key}}",
+        "tone": "ok"
+      }
+    },
+    {
+      "id": "not-posted",
+      "type": "end",
+      "result": {
+        "label": "Plan not posted",
+        "tone": "muted"
+      }
+    }
+  ]
+}

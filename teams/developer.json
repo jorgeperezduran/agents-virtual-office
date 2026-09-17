@@ -1,0 +1,48 @@
+{
+  "id": "developer",
+  "name": "Developer crew",
+  "role": "software developer",
+  "description": "Reads the story and the code, proposes an implementation plan with risks and test ideas, then shares it in Jira and creates the sub-tasks.",
+  "stationLabels": { "board": "Sprint board", "rack": "Codebase", "terminal": "Planning desk", "bench": "Test lab" },
+  "agents": [
+    { "id": "pia", "name": "Pia", "title": "Sprint Assistant", "shirt": "#3a66c9", "hair": "#2b2340", "skin": "#e0ac7e" },
+    { "id": "archie", "name": "Archie", "title": "Software Architect", "shirt": "#c98a1b", "hair": "#4a2c1f", "skin": "#f1c7a0" },
+    { "id": "tess", "name": "Tess", "title": "Test Strategist", "shirt": "#1f8a8a", "hair": "#6b2a1d", "skin": "#8d5a3b" }
+  ],
+  "briefing": {
+    "agent": "pia",
+    "jql": "project = {{project}} AND {{scope}} AND assignee = currentUser() AND statusCategory != Done AND issuetype not in subTaskIssueTypes() ORDER BY priority DESC",
+    "rankPrompt": "You plan a software developer's day. Put first what is already in progress, then what is ready to start, by priority. Favour tickets that unblock other people. Mark as not actionable the tickets with no engineering work in them."
+  },
+  "workflow": [
+    { "id": "plan", "type": "think", "agent": "archie", "station": "rack", "label": "Read the code and plan the change", "tools": "read",
+      "message": "Reading the code behind {{ticket.key}}",
+      "doneMessage": "Plan ready: {{plan.subtasks|count}} sub-tasks",
+      "prompt": "Plan the implementation of this ticket in this repository. Read the contributor notes and the code the ticket touches before you answer. Name real files and functions that you have opened, never guessed ones. Keep the approach to the smallest change that satisfies the ticket. List open questions instead of assuming answers. Break the work into 2 to 6 sub-tasks that can each be reviewed on their own, each with a description that says what done means.\n\nTicket {{ticket.key}}: {{ticket.summary}}\nType: {{ticket.type}}\n\n{{ticket.description}}",
+      "schema": { "type": "object", "properties": {
+        "summary": { "type": "string" },
+        "approach": { "type": "array", "items": { "type": "string" } },
+        "filesToTouch": { "type": "array", "items": { "type": "object", "properties": { "file": { "type": "string" }, "reason": { "type": "string" } } } },
+        "risks": { "type": "array", "items": { "type": "string" } },
+        "openQuestions": { "type": "array", "items": { "type": "string" } },
+        "subtasks": { "type": "array", "items": { "type": "object", "properties": { "summary": { "type": "string" }, "description": { "type": "string" } } } } } },
+      "save": "plan",
+      "show": [ { "title": "Approach", "path": "plan.approach" }, { "title": "Files to touch", "path": "plan.filesToTouch" }, { "title": "Risks", "path": "plan.risks" }, { "title": "Open questions", "path": "plan.openQuestions" }, { "title": "Sub-tasks", "path": "plan.subtasks" } ] },
+    { "id": "test-ideas", "type": "think", "agent": "tess", "station": "bench", "label": "List what must be tested",
+      "message": "Thinking about how this could break", "doneMessage": "{{tests.cases|count}} test ideas ready",
+      "prompt": "List the tests a developer should write or run for this change: unit tests first, then integration tests, then what to check by hand. One behaviour each, most valuable first, 5 to 10 items. Base them on the ticket and on the plan, and do not invent behaviour.\n\nTicket {{ticket.key}}: {{ticket.summary}}\n\n{{ticket.description}}\n\nPlan:\n{{plan.approach}}\n\nRisks:\n{{plan.risks}}",
+      "schema": { "type": "object", "properties": { "cases": { "type": "array", "items": { "type": "object", "properties": { "title": { "type": "string" }, "kind": { "type": "string", "enum": ["unit", "integration", "manual"] } } } } } },
+      "save": "tests", "show": [ { "title": "Test ideas", "path": "tests.cases" } ] },
+    { "id": "review-plan", "type": "gate", "agent": "archie", "label": "Review the plan", "title": "Review the plan for {{ticket.key}}",
+      "message": "{{plan.summary}}",
+      "show": [ { "title": "Approach", "path": "plan.approach" }, { "title": "Open questions", "path": "plan.openQuestions" }, { "title": "Sub-tasks", "path": "plan.subtasks" } ],
+      "actions": [
+        { "id": "continue", "label": "Looks right, continue", "primary": true },
+        { "id": "stop", "label": "I'll plan this myself", "result": { "label": "Planned by hand", "tone": "muted" } } ] },
+    { "id": "share-plan", "type": "jira", "agent": "archie", "label": "Share the plan in Jira", "action": "comment", "approveLabel": "Post the plan",
+      "body": "# Implementation plan\n{{plan.summary}}\n\n# Approach\n{{plan.approach}}\n\n# Risks\n{{plan.risks}}\n\n# Open questions\n{{plan.openQuestions}}\n\n# Tests\n{{tests.cases|titles}}" },
+    { "id": "create-subtasks", "type": "jira", "agent": "pia", "label": "Create the sub-tasks", "action": "create", "approveLabel": "Create sub-tasks",
+      "from": "plan.subtasks", "issueType": "{{issueTypes.subtask}}", "summary": "{{item.summary}}", "body": "{{item.description}}", "parent": "{{ticket.key}}", "save": "subtasks" },
+    { "id": "planned", "type": "end", "result": { "label": "Planned", "tone": "ok" } }
+  ]
+}

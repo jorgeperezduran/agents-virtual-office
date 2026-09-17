@@ -1,0 +1,81 @@
+{
+  "id": "qa",
+  "name": "QA crew",
+  "role": "QA engineer",
+  "description": "Turns a ticket into test cases and automated tests, runs them, then drafts the sign-off or the bug.",
+  "stationLabels": { "board": "Sprint board", "rack": "CI rack", "terminal": "Test terminal", "bench": "Bug desk" },
+  "agents": [
+    { "id": "ana", "name": "Ana", "title": "QA Analyst", "shirt": "#3a66c9", "hair": "#4a2c1f", "skin": "#f1c7a0" },
+    { "id": "sid", "name": "Sid", "title": "Test Automation Engineer", "shirt": "#23804a", "hair": "#1e1b2e", "skin": "#c98e62" },
+    { "id": "rex", "name": "Rex", "title": "Regression Selector", "shirt": "#8a5cc2", "hair": "#d8a03a", "skin": "#f3d2b3" },
+    { "id": "bea", "name": "Bea", "title": "Bug Reporter", "shirt": "#d0492f", "hair": "#6b2a1d", "skin": "#8d5a3b" }
+  ],
+  "briefing": {
+    "agent": "ana",
+    "jql": "project = {{project}} AND {{scope}} AND statusCategory = \"In Progress\" AND issuetype not in subTaskIssueTypes() ORDER BY priority DESC",
+    "rankPrompt": "You plan a QA engineer's day. Put first the tickets that are waiting for testing or review, then the ones still in development that will arrive soon, by priority. Mark as not actionable the tickets that are operational, legal, commercial or follow-up work with nothing to test."
+  },
+  "workflow": [
+    { "id": "prep", "type": "parallel", "branches": [
+      [ { "id": "regression", "type": "think", "agent": "rex", "station": "rack", "label": "Pick regression suites", "tools": "read",
+          "message": "Matching {{ticket.key}} against the existing tests",
+          "doneMessage": "Picked {{regression.suites|count}} regression suites",
+          "prompt": "Find up to 3 existing automated test files in this repository that are most likely to break because of this ticket. Search the test folders and choose by the feature area the ticket touches. Return paths relative to the repository root, exactly as they exist. Return fewer, or none, when nothing is clearly related. Do not pick setup-only files.\n\nTicket {{ticket.key}}: {{ticket.summary}}\n\n{{ticket.description}}",
+          "schema": { "type": "object", "properties": { "suites": { "type": "array", "items": { "type": "object", "properties": { "file": { "type": "string" }, "reason": { "type": "string" } } } } } },
+          "save": "regression", "show": [ { "title": "Regression suites", "path": "regression.suites" } ] } ],
+      [ { "id": "cases", "type": "think", "agent": "sid", "station": "terminal", "label": "Turn the ticket into test cases",
+          "message": "Turning the acceptance criteria into test cases",
+          "doneMessage": "{{cases.cases|count}} test cases ready",
+          "prompt": "Read this Jira ticket. First list its acceptance criteria as short statements. If the ticket has none, derive them from the description. Then write the test cases that prove them: concrete, one behaviour each, titled so that a failure explains itself. Cover the happy path and the most likely failure modes. Aim for 5 to 9 cases. Do not invent behaviour the ticket does not describe.\n\nTicket {{ticket.key}}: {{ticket.summary}}\nType: {{ticket.type}}\n\n{{ticket.description}}",
+          "schema": { "type": "object", "properties": {
+            "acceptanceCriteria": { "type": "array", "items": { "type": "string" } },
+            "cases": { "type": "array", "items": { "type": "object", "properties": { "title": { "type": "string" }, "kind": { "type": "string", "enum": ["positive", "negative", "edge"] } } } } } },
+          "save": "cases", "show": [ { "title": "Acceptance criteria", "path": "cases.acceptanceCriteria" }, { "title": "Test cases", "path": "cases.cases" } ] } ]
+    ] },
+    { "id": "write-tests", "type": "think", "agent": "sid", "station": "terminal", "label": "Write the automated tests", "tools": "write",
+      "message": "Writing automated tests for {{ticket.key}}",
+      "doneMessage": "Tests written: {{spec.testFile}}",
+      "prompt": "Write automated tests for this ticket in this repository, following its conventions exactly.\n\nRules:\n- First read the project's contributor notes (README, CLAUDE.md, CONTRIBUTING), the test configuration, and two or three existing tests close to this feature. Use the same framework, helpers and naming.\n- Put everything in ONE test file whose name includes the ticket key in lowercase without the dash. If a test file for this ticket already exists, extend that file instead of creating another.\n- Never modify any other existing file. If you need a new helper, create a NEW file.\n- Never read or write .env files and never hardcode credentials.\n- One test per case below, with the case title as the test title. If a case cannot be automated with what the repository offers, keep it as a skipped or pending test with a comment that says what is missing.\n- Do not run anything. You only have file tools.\n\nReturn testFile as the path relative to the repository root, otherFiles as any other file you created, and a two-sentence summary that says how many cases are automated and how many are pending.\n\nTest cases:\n{{cases.cases|numbered}}\n\nTicket {{ticket.key}}: {{ticket.summary}}\n\n{{ticket.description}}",
+      "schema": { "type": "object", "properties": { "testFile": { "type": "string" }, "otherFiles": { "type": "array", "items": { "type": "string" } }, "summary": { "type": "string" } } },
+      "save": "spec", "show": [ { "title": "Test file", "path": "spec.testFile" }, { "title": "What Sid wrote", "path": "spec.summary" } ] },
+    { "id": "run-tests", "type": "command", "agent": "sid", "station": "terminal", "label": "Run the tests", "command": "test",
+      "files": ["spec.testFile", "regression.suites[].file"], "save": "run", "onSkip": "not-run" },
+    { "id": "any-failures", "type": "branch", "when": { "path": "run.failed", "op": "gt", "value": 0 }, "goto": "draft-bug" },
+    { "id": "review", "type": "gate", "agent": "sid", "label": "Review the results", "title": "Review the results for {{ticket.key}}",
+      "message": "{{run.summary}}",
+      "show": [ { "title": "Test cases", "path": "cases.cases" } ],
+      "actions": [
+        { "id": "continue", "label": "Continue to sign-off", "primary": true },
+        { "id": "rework", "label": "Ask for more cases", "goto": "more-cases", "once": true },
+        { "id": "stop", "label": "Not now", "result": { "label": "Needs a manual check", "tone": "muted" } } ] },
+    { "id": "sign-off", "type": "jira", "agent": "sid", "label": "Post the sign-off", "action": "comment", "approveLabel": "Approve sign-off",
+      "body": "QA sign-off\nResult: {{run.summary}}\n\nTest cases:\n{{cases.cases|titles}}\n\nTest file: {{spec.testFile}}\nRegression suites:\n{{regression.suites[].file}}",
+      "onSkip": "not-signed" },
+    { "id": "signed", "type": "end", "result": { "label": "Signed off", "tone": "ok" } },
+
+    { "id": "more-cases", "type": "think", "agent": "sid", "station": "terminal", "label": "Add negative and edge cases",
+      "message": "Adding negative and edge cases", "doneMessage": "{{cases.cases|count}} test cases ready",
+      "prompt": "The QA engineer reviewed these test cases and asked for more negative and edge cases. Return 2 to 4 NEW cases that are not already covered. Do not invent behaviour the ticket does not describe.\n\nExisting cases:\n{{cases.cases|titles}}\n\nTicket {{ticket.key}}: {{ticket.summary}}\n\n{{ticket.description}}",
+      "schema": { "type": "object", "properties": { "cases": { "type": "array", "items": { "type": "object", "properties": { "title": { "type": "string" }, "kind": { "type": "string", "enum": ["negative", "edge"] } } } } } },
+      "save": "extra", "appendTo": "cases.cases", "appendFrom": "extra.cases",
+      "show": [ { "title": "Test cases", "path": "cases.cases" } ], "goto": "write-tests" },
+
+    { "id": "draft-bug", "type": "think", "agent": "bea", "station": "bench", "label": "Draft the bug report",
+      "message": "Collecting the failed steps and the evidence", "doneMessage": "Bug draft ready",
+      "prompt": "Automated tests failed for this ticket. Draft ONE bug report for the most important failure, from the evidence only. The steps must let a developer reproduce it. The tests were written by an AI agent moments ago: set likelyTestIssue to true when the error looks like a problem in the test, its data or the environment (import errors, timeouts, authentication errors, missing fixtures, selectors) rather than in the product, and explain why in note. Otherwise note is an empty string.\n\nTicket {{ticket.key}}: {{ticket.summary}}\n\n{{ticket.description}}\n\nFailed tests:\n{{run.failures|json}}",
+      "schema": { "type": "object", "properties": {
+        "title": { "type": "string" }, "severity": { "type": "string", "enum": ["Highest", "High", "Medium", "Low"] },
+        "steps": { "type": "array", "items": { "type": "string" } }, "expected": { "type": "string" }, "actual": { "type": "string" },
+        "evidence": { "type": "string" }, "likelyTestIssue": { "type": "boolean" }, "note": { "type": "string" } } },
+      "save": "bug", "show": [ { "title": "Bug", "path": "bug.title" }, { "title": "Steps to reproduce", "path": "bug.steps" }, { "title": "Bea's note", "path": "bug.note" } ] },
+    { "id": "file-bug", "type": "jira", "agent": "bea", "label": "File the bug", "action": "create", "approveLabel": "File bug",
+      "issueType": "{{issueTypes.bug}}", "summary": "{{bug.title}}", "priority": "{{bug.severity}}",
+      "body": "Found while testing {{ticket.key}}.\n\n# Steps to reproduce\n{{bug.steps|numbered}}\n\n# Expected\n{{bug.expected}}\n\n# Actual\n{{bug.actual}}\n\n# Evidence\n{{bug.evidence}}\n\n# Failed tests\n{{run.failures|titles}}",
+      "linkTo": "{{ticket.key}}", "linkType": "{{linkTypes.blocks}}", "save": "filed", "onSkip": "bug-discarded" },
+    { "id": "bug-filed", "type": "end", "result": { "label": "Bug {{filed.keysText}}", "tone": "err" } },
+
+    { "id": "not-run", "type": "end", "result": { "label": "Not run", "tone": "muted" } },
+    { "id": "not-signed", "type": "end", "result": { "label": "Needs a manual check", "tone": "muted" } },
+    { "id": "bug-discarded", "type": "end", "result": { "label": "Needs a manual check", "tone": "muted" } }
+  ]
+}
